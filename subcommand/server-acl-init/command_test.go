@@ -160,6 +160,19 @@ func TestRun_Tokens(t *testing.T) {
 			TokenName:          "catalog-sync",
 			SecretName:         "my-prefix-catalog-sync-acl-token",
 		},
+		"connect-injector token -release-name": {
+			TokenFlag:          "-create-injector-namespace-token",
+			ResourcePrefixFlag: "",
+			ReleaseNameFlag:    "release-name",
+			TokenName:          "connect-injector",
+			SecretName:         "release-name-consul-connect-injector-acl-token",
+		},
+		"connect-injector token -resource-prefix": {
+			TokenFlag:          "-create-injector-namespace-token",
+			ResourcePrefixFlag: "my-prefix",
+			TokenName:          "connect-injector",
+			SecretName:         "my-prefix-connect-injector-acl-token",
+		},
 		"enterprise-license token -release-name": {
 			TokenFlag:          "-create-enterprise-license-token",
 			ResourcePrefixFlag: "",
