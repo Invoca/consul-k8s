@@ -318,6 +318,7 @@ func (t *ServiceResource) shouldTrackEndpoints(key string) bool {
 
 	return svc.Spec.Type == corev1.ServiceTypeNodePort ||
 		svc.Spec.Type == corev1.ServiceTypeClusterIP ||
+		svc.Spec.Type != corev1.ServiceTypeExternalName ||
 		(t.LoadBalancerEndpointsSync && svc.Spec.Type == corev1.ServiceTypeLoadBalancer)
 }
 
@@ -481,6 +482,16 @@ func (t *ServiceResource) generateRegistrations(key string) {
 	}
 
 	switch svc.Spec.Type {
+
+	case corev1.ServiceTypeExternalName:
+		externalName := svc.Spec.ExternalName
+		r := baseNode
+		rs := baseService
+		r.Service = &rs
+		r.Service.ID = serviceID(r.Service.Service, externalName)
+		r.Service.Address = externalName
+		t.consulMap[key] = append(t.consulMap[key], &r)
+
 	// For LoadBalancer type services, we create a service instance for
 	// each LoadBalancer entry. We only support entries that have an IP
 	// address assigned (not hostnames).

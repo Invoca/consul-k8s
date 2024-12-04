@@ -2,8 +2,6 @@ package catalog
 
 import (
 	"context"
-	"testing"
-
 	mapset "github.com/deckarep/golang-set"
 	"github.com/hashicorp/consul-k8s/control-plane/helper/controller"
 	consulapi "github.com/hashicorp/consul/api"
@@ -15,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"testing"
 )
 
 const nodeName1 = "ip-10-11-12-13.ec2.internal"
@@ -368,6 +367,32 @@ func TestServiceResource_externalIPPrefix(t *testing.T) {
 		require.Equal(r, "3.3.3.3", actual[0].Service.Address)
 		require.Equal(r, "prefixfoo", actual[1].Service.Service)
 		require.Equal(r, "4.4.4.4", actual[1].Service.Address)
+	})
+}
+
+func TestServiceResource_externalName(t *testing.T) {
+	t.Parallel()
+	client := fake.NewSimpleClientset()
+	syncer := newTestSyncer()
+	serviceResource := defaultServiceResource(client, syncer)
+
+	// Start the controller
+	closer := controller.TestControllerRun(&serviceResource)
+	defer closer()
+
+	// Insert the service
+	svc := externalNameService("foo", metav1.NamespaceDefault, "service.internal.prod.foo.com")
+	_, err := client.CoreV1().Services(metav1.NamespaceDefault).Create(context.Background(), svc, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Verify what we got
+	retry.Run(t, func(r *retry.R) {
+		syncer.Lock()
+		defer syncer.Unlock()
+		actual := syncer.Registrations
+		require.Len(r, actual, 1)
+		require.Equal(r, "foo", actual[0].Service.Service)
+		require.Equal(r, "service.internal.prod.foo.com", actual[0].Service.Address)
 	})
 }
 
@@ -1549,6 +1574,21 @@ func lbService(name, namespace, lbIP string) *apiv1.Service {
 					},
 				},
 			},
+		},
+	}
+}
+
+// externalNameService returns a Kubernetes service of type ExternalName.
+func externalNameService(name, namespace string, fqdn string) *apiv1.Service {
+	return &apiv1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+
+		Spec: apiv1.ServiceSpec{
+			Type:         apiv1.ServiceTypeExternalName,
+			ExternalName: fqdn,
 		},
 	}
 }
