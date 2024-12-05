@@ -278,7 +278,7 @@ func (c *Command) Run(args []string) int {
 			EnableK8SNSMirroring:                  c.flagEnableK8SNSMirroring,
 			K8SNSMirroringPrefix:                  c.flagK8SNSMirroringPrefix,
 			ConsulNodeName:                        c.flagConsulNodeName,
-			WaitForServiceSnapshotToBePopulatedCh: waitForInitalServicesCh,
+			WaitForInitialServicesToBePopulatedCh: waitForInitalServicesCh,
 		}
 
 		resource.PopulateInitialServices()
