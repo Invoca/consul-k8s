@@ -66,6 +66,10 @@ type ServiceResource struct {
 	// Ctx is used to cancel processes kicked off by ServiceResource.
 	Ctx context.Context
 
+	// waitForServiceSnapshotToBePopulatedCh is the chan used to signal that a snapshot of services has synced
+	// reaping of services in consul should wait for this to allow best effort population of "view of services"
+	WaitForInitialServicesToBePopulatedCh chan bool
+
 	// AllowK8sNamespacesSet is a set of k8s namespaces to explicitly allow for
 	// syncing. It supports the special character `*` which indicates that
 	// all k8s namespaces are eligible unless explicitly denied. This filter
@@ -814,6 +818,23 @@ func (t *ServiceResource) addPrefixAndK8SNamespace(name, namespace string) strin
 	}
 
 	return name
+}
+
+func (t *ServiceResource) PopulateInitialServices() {
+	defer close(t.WaitForInitialServicesToBePopulatedCh)
+
+	// Open question, is this okay when there are thousands of Services in the cluster?
+	allTheServices, err := t.Client.CoreV1().Services("").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		// TODO - Is it valid to start reaping if we don't get all the Services initial to populate our view?
+		t.Log.Warn("Failed to list all services to preform initial sync", "err", err)
+		return
+	}
+
+	for _, service := range allTheServices.Items {
+		key := fmt.Sprintf("%s/%s", service.ObjectMeta.Namespace, service.ObjectMeta.Name)
+		t.Upsert(key, &service)
+	}
 }
 
 // consulHealthCheckID deterministically generates a health check ID based on service ID and Kubernetes namespace.

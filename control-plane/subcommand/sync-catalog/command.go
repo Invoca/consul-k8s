@@ -241,43 +241,52 @@ func (c *Command) Run(args []string) int {
 				Client: c.consulClient,
 			}
 		}
+
+		waitForInitalServicesCh := make(chan bool)
+
 		// Build the Consul sync and start it
 		syncer := &catalogtoconsul.ConsulSyncer{
-			Client:                   c.consulClient,
-			Log:                      c.logger.Named("to-consul/sink"),
-			EnableNamespaces:         c.flagEnableNamespaces,
-			CrossNamespaceACLPolicy:  c.flagCrossNamespaceACLPolicy,
-			SyncPeriod:               c.flagConsulWritePeriod,
-			ServicePollPeriod:        c.flagConsulWritePeriod * 2,
-			ConsulK8STag:             c.flagConsulK8STag,
-			ConsulNodeName:           c.flagConsulNodeName,
-			ConsulNodeServicesClient: svcsClient,
+			Client:                                c.consulClient,
+			Log:                                   c.logger.Named("to-consul/sink"),
+			EnableNamespaces:                      c.flagEnableNamespaces,
+			CrossNamespaceACLPolicy:               c.flagCrossNamespaceACLPolicy,
+			SyncPeriod:                            c.flagConsulWritePeriod,
+			ServicePollPeriod:                     c.flagConsulWritePeriod * 2,
+			ConsulK8STag:                          c.flagConsulK8STag,
+			ConsulNodeName:                        c.flagConsulNodeName,
+			ConsulNodeServicesClient:              svcsClient,
+			WaitForServiceSnapshotToBePopulatedCh: waitForInitalServicesCh,
 		}
 		go syncer.Run(ctx)
 
+		resource := catalogtoconsul.ServiceResource{
+			Log:                                   c.logger.Named("to-consul/source"),
+			Client:                                c.clientset,
+			Syncer:                                syncer,
+			Ctx:                                   ctx,
+			AllowK8sNamespacesSet:                 allowSet,
+			DenyK8sNamespacesSet:                  denySet,
+			ExplicitEnable:                        !c.flagK8SDefault,
+			ClusterIPSync:                         c.flagSyncClusterIPServices,
+			LoadBalancerEndpointsSync:             c.flagSyncLBEndpoints,
+			NodePortSync:                          catalogtoconsul.NodePortSyncType(c.flagNodePortSyncType),
+			ConsulK8STag:                          c.flagConsulK8STag,
+			ConsulServicePrefix:                   c.flagConsulServicePrefix,
+			AddK8SNamespaceSuffix:                 c.flagAddK8SNamespaceSuffix,
+			EnableNamespaces:                      c.flagEnableNamespaces,
+			ConsulDestinationNamespace:            c.flagConsulDestinationNamespace,
+			EnableK8SNSMirroring:                  c.flagEnableK8SNSMirroring,
+			K8SNSMirroringPrefix:                  c.flagK8SNSMirroringPrefix,
+			ConsulNodeName:                        c.flagConsulNodeName,
+			WaitForServiceSnapshotToBePopulatedCh: waitForInitalServicesCh,
+		}
+
+		resource.PopulateInitialServices()
+
 		// Build the controller and start it
 		ctl := &controller.Controller{
-			Log: c.logger.Named("to-consul/controller"),
-			Resource: &catalogtoconsul.ServiceResource{
-				Log:                        c.logger.Named("to-consul/source"),
-				Client:                     c.clientset,
-				Syncer:                     syncer,
-				Ctx:                        ctx,
-				AllowK8sNamespacesSet:      allowSet,
-				DenyK8sNamespacesSet:       denySet,
-				ExplicitEnable:             !c.flagK8SDefault,
-				ClusterIPSync:              c.flagSyncClusterIPServices,
-				LoadBalancerEndpointsSync:  c.flagSyncLBEndpoints,
-				NodePortSync:               catalogtoconsul.NodePortSyncType(c.flagNodePortSyncType),
-				ConsulK8STag:               c.flagConsulK8STag,
-				ConsulServicePrefix:        c.flagConsulServicePrefix,
-				AddK8SNamespaceSuffix:      c.flagAddK8SNamespaceSuffix,
-				EnableNamespaces:           c.flagEnableNamespaces,
-				ConsulDestinationNamespace: c.flagConsulDestinationNamespace,
-				EnableK8SNSMirroring:       c.flagEnableK8SNSMirroring,
-				K8SNSMirroringPrefix:       c.flagK8SNSMirroringPrefix,
-				ConsulNodeName:             c.flagConsulNodeName,
-			},
+			Log:      c.logger.Named("to-consul/controller"),
+			Resource: &resource,
 		}
 
 		toConsulCh = make(chan struct{})

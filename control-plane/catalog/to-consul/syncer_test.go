@@ -290,6 +290,9 @@ func testConsulSyncer(client *api.Client) (*ConsulSyncer, func()) {
 // testConsulSyncerWithConfig starts a consul syncer that can be configured
 // prior to starting via the configurator method.
 func testConsulSyncerWithConfig(client *api.Client, configurator func(*ConsulSyncer)) (*ConsulSyncer, func()) {
+	waitForInitialServicesCh := make(chan bool)
+	close(waitForInitialServicesCh)
+
 	s := &ConsulSyncer{
 		Client:            client,
 		Log:               hclog.Default(),
@@ -300,6 +303,7 @@ func testConsulSyncerWithConfig(client *api.Client, configurator func(*ConsulSyn
 		ConsulNodeServicesClient: &PreNamespacesNodeServicesClient{
 			Client: client,
 		},
+		WaitForServiceSnapshotToBePopulatedCh: waitForInitialServicesCh,
 	}
 	configurator(s)
 	s.init()

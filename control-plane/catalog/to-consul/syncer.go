@@ -76,6 +76,10 @@ type ConsulSyncer struct {
 	lock sync.Mutex
 	once sync.Once
 
+	// WaitForServiceSnapshotToBePopulatedCh is the chan used to wait for a snapshot of services to be
+	// populated at startup before to starting to reap services in consul that are no longer needed
+	WaitForServiceSnapshotToBePopulatedCh chan bool
+
 	// initialSync is used to ensure that we have received our initial list
 	// of services before we start reaping services. When it is closed,
 	// the initial sync is complete.
@@ -167,6 +171,11 @@ func (s *ConsulSyncer) watchReapableServices(ctx context.Context) {
 	// populated. If we don't wait, we will reap all services tagged with k8s
 	// because we have no tracked services in our maps yet.
 	<-s.initialSync
+
+	s.Log.Info("Wait for services to be populated before checking if there no longer used one in consul")
+	<-s.WaitForServiceSnapshotToBePopulatedCh
+	s.Log.Debug("Services have been populated at startup. We can start looking " +
+		"for no longer needed services in consul")
 
 	opts := &api.QueryOptions{
 		AllowStale: true,
