@@ -263,6 +263,10 @@ func (s *ConsulSyncer) watchService(ctx context.Context, name, namespace string)
 	s.Log.Info("starting service watcher", "service-name", name, "service-consul-namespace", namespace)
 	defer s.Log.Info("stopping service watcher", "service-name", name, "service-consul-namespace", namespace)
 
+	s.Log.Debug("[watchService] waiting for services to be populated before enabling watching a service")
+	<-s.WaitForServiceSnapshotToBePopulatedCh
+	s.Log.Debug("[watchService] services have been populated at startup, watching")
+
 	for {
 		select {
 		// Quit if our context is over
