@@ -26,7 +26,8 @@ func TestConsulSyncer_register(t *testing.T) {
 	require := require.New(t)
 
 	// Set up server, client, syncer
-	a, err := testutil.NewTestServerConfigT(t, nil)
+
+	a, err := testutil.NewTestServerConfigT(t, InvocaSpecificConsulConfig)
 	require.NoError(err)
 	defer a.Stop()
 
@@ -72,7 +73,7 @@ func TestConsulSyncer_reapServiceInstance(t *testing.T) {
 			require := require.New(t)
 
 			// Set up server, client, syncer
-			a, err := testutil.NewTestServerConfigT(t, nil)
+			a, err := testutil.NewTestServerConfigT(t, InvocaSpecificConsulConfig)
 			require.NoError(err)
 			defer a.Stop()
 
@@ -137,7 +138,7 @@ func TestConsulSyncer_reapService(t *testing.T) {
 	for _, k8sNS := range sourceK8sNamespaceAnnotations {
 		t.Run(k8sNS, func(tt *testing.T) {
 			// Set up server, client, syncer
-			a, err := testutil.NewTestServerConfigT(tt, nil)
+			a, err := testutil.NewTestServerConfigT(tt, InvocaSpecificConsulConfig)
 			require.NoError(tt, err)
 			defer a.Stop()
 
@@ -185,7 +186,7 @@ func TestConsulSyncer_reapService(t *testing.T) {
 func TestConsulSyncer_noReapingUntilInitialSync(t *testing.T) {
 	t.Parallel()
 
-	a, err := testutil.NewTestServerConfigT(t, nil)
+	a, err := testutil.NewTestServerConfigT(t, InvocaSpecificConsulConfig)
 	require.NoError(t, err)
 	defer a.Stop()
 	client, err := api.NewClient(&api.Config{
@@ -289,6 +290,9 @@ func testConsulSyncer(client *api.Client) (*ConsulSyncer, func()) {
 // testConsulSyncerWithConfig starts a consul syncer that can be configured
 // prior to starting via the configurator method.
 func testConsulSyncerWithConfig(client *api.Client, configurator func(*ConsulSyncer)) (*ConsulSyncer, func()) {
+	waitForInitialServicesCh := make(chan bool)
+	close(waitForInitialServicesCh)
+
 	s := &ConsulSyncer{
 		Client:            client,
 		Log:               hclog.Default(),
@@ -299,6 +303,7 @@ func testConsulSyncerWithConfig(client *api.Client, configurator func(*ConsulSyn
 		ConsulNodeServicesClient: &PreNamespacesNodeServicesClient{
 			Client: client,
 		},
+		WaitForServiceSnapshotToBePopulatedCh: waitForInitialServicesCh,
 	}
 	configurator(s)
 	s.init()
