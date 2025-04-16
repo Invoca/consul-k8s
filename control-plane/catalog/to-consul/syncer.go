@@ -76,6 +76,10 @@ type ConsulSyncer struct {
 	lock sync.Mutex
 	once sync.Once
 
+	// WaitForServiceSnapshotToBePopulatedCh is the chan used to wait for a snapshot of services to be
+	// populated at startup before to starting to reap services in consul that are no longer needed
+	WaitForServiceSnapshotToBePopulatedCh chan bool
+
 	// initialSync is used to ensure that we have received our initial list
 	// of services before we start reaping services. When it is closed,
 	// the initial sync is complete.
@@ -130,7 +134,10 @@ func (s *ConsulSyncer) Sync(rs []*api.CatalogRegistration) {
 
 	// Signal that the initial sync is complete and our maps have been populated.
 	// We can now safely reap untracked services.
-	s.initialSyncOnce.Do(func() { close(s.initialSync) })
+	s.initialSyncOnce.Do(func() {
+		s.Log.Debug("[Sync] initial sync happened, reaping of services enabled")
+		close(s.initialSync)
+	})
 }
 
 // Run is the long-running runloop for reconciling the local set of
@@ -167,6 +174,12 @@ func (s *ConsulSyncer) watchReapableServices(ctx context.Context) {
 	// populated. If we don't wait, we will reap all services tagged with k8s
 	// because we have no tracked services in our maps yet.
 	<-s.initialSync
+	s.Log.Debug("[watchReapableServices] initial sync has happened")
+
+	s.Log.Info("[watchReapableServices] waiting for services to be populated before enabling reaping of services")
+	<-s.WaitForServiceSnapshotToBePopulatedCh
+	s.Log.Debug("[watchReapableServices] services have been populated at startup. We can start looking " +
+		"for no longer needed services in Consul")
 
 	opts := &api.QueryOptions{
 		AllowStale: true,
@@ -249,6 +262,10 @@ func (s *ConsulSyncer) watchReapableServices(ctx context.Context) {
 func (s *ConsulSyncer) watchService(ctx context.Context, name, namespace string) {
 	s.Log.Info("starting service watcher", "service-name", name, "service-consul-namespace", namespace)
 	defer s.Log.Info("stopping service watcher", "service-name", name, "service-consul-namespace", namespace)
+
+	s.Log.Debug("[watchService] waiting for services to be populated before enabling watching a service")
+	<-s.WaitForServiceSnapshotToBePopulatedCh
+	s.Log.Debug("[watchService] services have been populated at startup, watching")
 
 	for {
 		select {

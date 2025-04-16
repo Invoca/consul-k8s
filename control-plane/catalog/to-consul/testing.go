@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"github.com/hashicorp/consul/sdk/testutil"
 	"sync"
 
 	"github.com/hashicorp/consul/api"
@@ -26,4 +27,9 @@ func (s *testSyncer) Sync(rs []*api.CatalogRegistration) {
 
 func newTestSyncer() *testSyncer {
 	return &testSyncer{}
+}
+
+// callback to remove the peering key from the config generated, avoids "invalid config key peering"
+func InvocaSpecificConsulConfig(cfg *testutil.TestServerConfig) {
+	cfg.Peering = nil
 }
