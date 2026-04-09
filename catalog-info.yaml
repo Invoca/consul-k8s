@@ -14,4 +14,4 @@ spec:
   type: tool
   lifecycle: production
   owner: sre-core
-  # system: TODO — see https://github.com/Invoca/backstage-catalog
+  system: kubernetes-platform
